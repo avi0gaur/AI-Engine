@@ -1,11 +1,12 @@
 import re, collections
 
-
 __author__ = 'avi0gaur'
+
 """
 This script is to provide functionality of spell check and replace the error word with
 nearest matching word present in dic.
 """
+
 def collect_w(text):
     return re.findall('[a-z]+', text.lower())
 
@@ -15,7 +16,7 @@ def train(features):
         model[f] += 1
     return model
 
-NWORDS = train(collect_w(open('big.txt','r').read()))
+NWORDS = train(collect_w(open('D:\\AI-Engine\\AI-Engine\\res\\spell_corpus.txt','r').read()))
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
 
 def edits1(word):
@@ -33,5 +34,7 @@ def known(words):
     return set(w for w in words if w in NWORDS)
 
 def correct(word):
-    candidates = known([word]) or known(edits1(word)) or    known_edits2(word) or [word]
+    candidates = known([word]) or known(edits1(word)) or known_edits2(word) or [word]
     return max(candidates, key=NWORDS.get)
+
+print(correct("sear"))

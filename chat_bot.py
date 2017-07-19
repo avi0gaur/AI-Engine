@@ -3,24 +3,26 @@ import sys
 import json
 from adapt.intent import IntentBuilder
 from adapt.engine import IntentDeterminationEngine
-from Corpus import Bank_Corpus
+from .Corpus import Bank_Corpus
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import PorterStemmer
+from .chat_logger import BotLogger
+from .spell_checker import correct
+
 
 __author__ = 'avi0gaur'
 
 class CrmnextChatBot:
 
-    engine = IntentDeterminationEngine()
-    ps = PorterStemmer()
-    stop_cor = set(stopwords.words('english'))
-    first_time = True
-    st = 0
-    card_lost_intent = []
-
     def __init__(self):
-        pass
+        self.engine = IntentDeterminationEngine()
+        self.bot = BotLogger()
+        self.ps = PorterStemmer()
+        self.stop_cor = set(stopwords.words('english'))
+        self.first_time = True
+        self.st = 0
+        self.card_lost_intent = []
 
     def train_intent(self):
         """
@@ -43,8 +45,6 @@ class CrmnextChatBot:
             .build()
 
         self.engine.register_intent_parser(self.card_lost_intent)
-
-
     """
     json pattern 
     eg:
@@ -58,19 +58,21 @@ class CrmnextChatBot:
         Thread starts from here.
         :return:
         """
+        self.bot.log_debug("Received Json in run_bot: {}".format(conv))
+
         msg = conv["user_text"]
         if self.first_time:
             self.train_intent()
             self.first_time = False
-            #self.process_flow(self.intent_parser(conv))
-            return self.intent_parser(msg)
-
+            self.process_flow(self.intent_parser(msg))
+        else:
+            self.process_flow(conv)
 
     def process_flow(self, intent_json):
-        intent = intent_json.get("intent_type")
+        intent = intent_json["intent_type"]
         {
             "CARD_LOST_INTENT": self.card_lost_process
-        }[intent]()
+        }[intent](intent_json)
 
     def remove_stop_words(self, conv):
         word_tokens = word_tokenize(conv)
@@ -97,45 +99,58 @@ class CrmnextChatBot:
                         }
 
     def card_lost_process(self, ud):
+
         response = {
             'response_text': "I am sorry ! didn't get you.",
-            'card_type': "No Card"
+            'card_type': "No Card",
+            'user_stage': self.st
         }
+
+        num_cards = ud.get("number of cards")
 
         if self.st is 0:
             response['response_text'] = Bank_Corpus.CARD_LOST_FLOW_RESPONSES[self.st]
             response['card_type'] = Bank_Corpus.FORM_USER_VERIFICATION
             self.st += 1
+            response['user_stage'] = self.st
         elif self.st is 1:
             mn = ud.get("mobile_number")
             response['response_text'] = Bank_Corpus.CARD_LOST_FLOW_RESPONSES[self.st].format(mn[6:10])
             self.st += 1
+            response['user_stage'] = self.st
         elif self.st is 2:
             mn = ud.get("user_name")
-            num_cards = ud.get("number of cards")
             response['response_text'] = Bank_Corpus.CARD_LOST_FLOW_RESPONSES[self.st].format(mn, num_cards)
             # Provide json response to build card on UI
             response['card_type'] = "#select_card"
             self.st += 1
+            response['user_stage'] = self.st
         elif self.st is 3:
             #It should to be card number or list of card user need to block
             ud_res = ud.get('user_response')
             ud_card_lst = ud.get("cards")
-            # self.cb.block_card(ud,)
             self.st += 1
+            response['user_stage'] = self.st
         elif self.st is 4:
-            response['response_text'] = "Do you wish to report any fraud transactions."
+            response['response_text'] = Bank_Corpus.CARD_LOST_FLOW_RESPONSES[self.st]
             self.st += 1
+            response['user_stage'] = self.st
         elif self.st is 5:
-            response['response_text'] = "Sure, your credit card ending 5694 and debit card ending 7654, has been successfully blocked. while replacing do you want to upgrade your card?"
-            self.st +=1
+            Bank_Corpus.CARD_LOST_FLOW_RESPONSES[self.st].format(num_cards)
+            self.st += 1
+            response['user_stage'] = self.st
         elif self.st is 6:
-            return "#re_issue_card_status"
+            response['card_type'] = Bank_Corpus.CARD_LOST_FLOW_RESPONSES[self.st]
+            self.st += 1
+            response['user_stage'] = self.st
+            return
         else:
-            return "Please be specific"
+            response['response_text'] = "Please be specific, would you like to cancel the card blocking process ?"
 
-
-
-
-
-
+    def clean_text(self, raw):
+        t = self.remove_stop_words(raw)
+        c = []
+        for w in t:
+            c.append(correct(w))
+        c = self.rooting_word(c)
+        return c

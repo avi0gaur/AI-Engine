@@ -1,23 +1,31 @@
 import sys
 import zmq
 import time
+import random
 from chat_bot import CrmnextChatBot
 
-"""
-The Python code below will create an echo server that listens on port 5000 with a REP socket. 
-It will then loop an alternation of performing .recv() for incoming requests and then .send() a reply to them.
-"""
+__author__ = 'avi0gaur'
 
+class PubUser:
 
+    bot = CrmnextChatBot()
 
-bot = CrmnextChatBot()
-port = "5556"
-context = zmq.Context()
-socket = context.socket(zmq.PAIR)
-socket.connect("tcp://localhost:%s" % port)
+    def __init__(self):
+        """
+        Configuration for publisher to send bot response to .net layer
+        """
+        port = "5557"
+        ip = "192.168.0.40"
+        context = zmq.Context()
+        self.socket = context.socket(zmq.PUB)
+        self.socket.connect("tcp://" + ip + ":" + port)
 
-while True:
-    msg = socket.recv_json()
-    res = bot.run_bot(msg)
-    socket.send_json(res)
-    time.sleep(1)
+    def pub(self, res):
+        """
+        This method is associated with calling bot logic and sending the response to .net layer
+        :param res:
+        :return:
+        """
+        conv = self.bot.run_bot(res)
+        print(conv)
+        self.socket.send_json(conv)
